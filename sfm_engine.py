@@ -63,6 +63,7 @@ from sfm_state import (
     portfolio_value,
     save_state,
 )
+from sfm_brain import run_brain as brain_run, load_overrides as brain_overrides
 
 
 def _read_supervisor_cmd() -> dict:
@@ -94,6 +95,12 @@ def _load_wallet():
 
 def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
     st.cycle = cycle
+
+    # ── Brain overrides — load every cycle, run brain every 10 ─────
+    overrides   = brain_overrides()
+    stop_loss   = overrides.get("STOP_LOSS_PCT",   STOP_LOSS_PCT)
+    take_profit = overrides.get("TAKE_PROFIT_PCT", TAKE_PROFIT_PCT)
+    trade_size  = overrides.get("TRADE_SIZE_USD",  TRADE_SIZE_USD)
 
     # ── 0. Supervisor command ───────────────────────────────────────
     cmd = _read_supervisor_cmd()
@@ -134,8 +141,8 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
         candles=candles,
         open_position=has_position,
         entry_price=entry_price,
-        stop_loss_pct=STOP_LOSS_PCT,
-        take_profit_pct=TAKE_PROFIT_PCT,
+        stop_loss_pct=stop_loss,
+        take_profit_pct=take_profit,
         scaled_out=scaled_out,
         last_buy_candle_idx=last_buy_candle_idx,
         cooldown_candles=3,
@@ -166,7 +173,7 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
     # ── 3. Execute ──────────────────────────────────────────────────
     if signal.action == "BUY" and not has_position and entry_ok:
         # Don't buy if already at max open exposure
-        trade_usd_adj = TRADE_SIZE_USD * size_mult
+        trade_usd_adj = trade_size * size_mult
         if st.usdc_balance < trade_usd_adj:
             log.warning("[CYCLE %d] Insufficient USDC (%.2f) — skipping buy", cycle, st.usdc_balance)
         elif portfolio_value(st, price) - st.usdc_balance >= MAX_OPEN_USD:
@@ -220,6 +227,24 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
                 log_execution("sfm", "SFM", "SELL", proceeds_usd, effective_price, pnl, signal.reason)
             except Exception:
                 pass
+
+    # ── Brain — self-tune parameters every 10 cycles ────────────────
+    if cycle % 10 == 0:
+        pv = portfolio_value(st, price)
+        peak_pv = getattr(st, "peak_portfolio_val", pv)
+        if pv > peak_pv:
+            peak_pv = pv
+        st.peak_portfolio_val = peak_pv
+        st.portfolio_val = pv
+        st.dd_pct = ((peak_pv - pv) / peak_pv * 100) if peak_pv > 0 else 0.0
+        if st.position:
+            pos_summary = (
+                f"{st.position.sfm_qty:.0f} SFM @ entry=${st.position.entry_price:.8f}"
+                f" (cost=${st.position.cost_usd:.2f})"
+            )
+        else:
+            pos_summary = "none"
+        brain_run(st, cycle, pos_summary)
 
     save_state(st)
 
