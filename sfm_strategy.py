@@ -36,9 +36,9 @@ from sfm_data import Candle
 
 log = logging.getLogger("sfm_strategy")
 
-# ── Signal thresholds ───────────────────────────────────────────────
-RSI_OVERSOLD   = 45.0   # loosened: fires on smaller dips
-RSI_OVERBOUGHT = 58.0   # loosened: exits on smaller bounces
+# ── Signal thresholds — AGGRESSIVE PAPER MODE ───────────────────────
+RSI_OVERSOLD   = 58.0   # buy any pullback below 58 — catches much more
+RSI_OVERBOUGHT = 75.0   # hold positions much longer, exit only at extreme
 EMA_PERIOD     = 20
 RSI_PERIOD     = 14
 ATR_PERIOD     = 14
@@ -152,33 +152,36 @@ def compute_signal(
             return Signal("SELL", rsi, ema, atr, price, volume, vol_avg,
                           f"trail_exit rsi={rsi:.1f}")
 
-    # ── Entry signals ───────────────────────────────────────────────
+    # ── Entry signals — AGGRESSIVE ──────────────────────────────────
     if not open_position:
-        # ENTRY 1 — Dip buy: RSI oversold + price at or below EMA
-        price_below_ema = price <= ema * 1.002
-        dip = len(closes) >= 3 and closes[-1] <= closes[-2]
+        ema_gap_pct = (price - ema) / ema * 100 if ema > 0 else 0
 
-        if rsi < RSI_OVERSOLD and (price_below_ema or dip):
-            reason = f"oversold rsi={rsi:.1f} ema_gap={((price-ema)/ema*100):.1f}%"
+        # ENTRY 1 — Dip buy: RSI below oversold (no EMA required in aggressive mode)
+        if rsi < RSI_OVERSOLD:
+            reason = f"oversold rsi={rsi:.1f} gap={ema_gap_pct:.1f}%"
             return Signal("BUY", rsi, ema, atr, price, volume, vol_avg, reason)
 
-        # ENTRY 2 — Momentum cross: price just crossed above EMA + RSI building
-        # Catches early breakouts before RSI reaches overbought territory.
-        # Condition: prev close was below EMA, current close is above EMA,
-        #            RSI in 42–56 range (not already overbought).
+        # ENTRY 2 — EMA crossover momentum: price just crossed above EMA
         if len(closes) >= 2 and ema > 0:
             prev_ema = _ema(closes[:-1], EMA_PERIOD)
             ema_cross_up = closes[-2] < prev_ema and price > ema
-            momentum_rsi = 42.0 <= rsi <= 56.0
-            if ema_cross_up and momentum_rsi:
-                reason = f"ema_cross_up rsi={rsi:.1f} gap={((price-ema)/ema*100):.1f}%"
+            if ema_cross_up and rsi <= 68.0:
+                reason = f"ema_cross_up rsi={rsi:.1f} gap={ema_gap_pct:.1f}%"
                 return Signal("BUY", rsi, ema, atr, price, volume, vol_avg, reason)
 
-        # Overbought avoid: RSI extended + price stretched above EMA
+        # ENTRY 3 — Trend continuation: price above EMA, RSI rising, 2 green candles
+        # Rides existing momentum — the move we kept missing.
+        if len(closes) >= 3 and ema > 0:
+            two_green  = closes[-1] > closes[-2] > closes[-3]
+            above_ema  = price > ema
+            rsi_riding = 45.0 <= rsi <= 65.0
+            if two_green and above_ema and rsi_riding:
+                reason = f"trend_ride rsi={rsi:.1f} gap={ema_gap_pct:.1f}%"
+                return Signal("BUY", rsi, ema, atr, price, volume, vol_avg, reason)
+
+        # Only avoid entry when truly extreme (RSI > 75)
         if rsi > RSI_OVERBOUGHT:
-            ema_gap_pct = (price - ema) / ema * 100 if ema > 0 else 0
-            if ema_gap_pct >= 2.0:
-                return Signal("HOLD", rsi, ema, atr, price, volume, vol_avg,
-                              f"overbought_avoid rsi={rsi:.1f} gap={ema_gap_pct:.1f}%")
+            return Signal("HOLD", rsi, ema, atr, price, volume, vol_avg,
+                          f"extreme_overbought rsi={rsi:.1f}")
 
     return Signal("HOLD", rsi, ema, atr, price, volume, vol_avg, "no_signal")
