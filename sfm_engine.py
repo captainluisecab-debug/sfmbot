@@ -171,7 +171,7 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
         else:
             trade_usd = min(trade_usd_adj, st.usdc_balance)
             log.info("[CYCLE %d] BUY $%.2f of SFM @ $%.8f", cycle, trade_usd, price)
-            fill = buy_sfm(trade_usd, pubkey, keypair)
+            fill = buy_sfm(trade_usd, pubkey, keypair, price_usd=price)
             if fill:
                 # In live mode, out_amount is SFM lamports; convert to tokens
                 if TRADE_MODE == "LIVE":
@@ -190,7 +190,7 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
             "[CYCLE %d] SELL %.0f SFM @ $%.8f ($%.2f) | reason=%s",
             cycle, sfm_to_sell, price, proceeds_usd, signal.reason,
         )
-        fill = sell_sfm(sfm_to_sell, pubkey, keypair)
+        fill = sell_sfm(sfm_to_sell, pubkey, keypair, price_usd=price)
         if fill:
             if TRADE_MODE == "LIVE":
                 usdc_received = fill["out_amount"] / 1e6

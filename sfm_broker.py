@@ -209,8 +209,39 @@ def execute_swap(quote: Quote, wallet_pubkey: str, keypair=None) -> Optional[dic
     }
 
 
-def buy_sfm(usd_amount: float, wallet_pubkey: str = "", keypair=None) -> Optional[dict]:
-    """High-level: quote then execute a BUY of SFM with usd_amount USDC."""
+def _paper_fill_buy(usd_amount: float, price_usd: float) -> dict:
+    """Simulate a BUY fill in paper mode using live price. No Jupiter needed."""
+    sfm_received = usd_amount / price_usd if price_usd > 0 else 0.0
+    log.info("[PAPER] BUY $%.2f USDC -> %.0f SFM @ $%.8f (simulated)", usd_amount, sfm_received, price_usd)
+    return {
+        "status": "PAPER_FILL",
+        "tx_sig": "paper_tx",
+        "in_amount":  int(usd_amount * 10 ** USDC_DECIMALS),
+        "out_amount": int(sfm_received * 10 ** SFM_DECIMALS),
+    }
+
+
+def _paper_fill_sell(sfm_amount: float, price_usd: float) -> dict:
+    """Simulate a SELL fill in paper mode using live price. No Jupiter needed."""
+    usdc_received = sfm_amount * price_usd
+    log.info("[PAPER] SELL %.0f SFM -> $%.2f USDC @ $%.8f (simulated)", sfm_amount, usdc_received, price_usd)
+    return {
+        "status": "PAPER_FILL",
+        "tx_sig": "paper_tx",
+        "in_amount":  int(sfm_amount * 10 ** SFM_DECIMALS),
+        "out_amount": int(usdc_received * 10 ** USDC_DECIMALS),
+    }
+
+
+def buy_sfm(usd_amount: float, wallet_pubkey: str = "", keypair=None,
+            price_usd: float = 0.0) -> Optional[dict]:
+    """High-level: BUY usd_amount USDC worth of SFM.
+    In PAPER mode: simulates fill using live price — no Jupiter call.
+    In LIVE mode: fetches real Jupiter quote and executes swap.
+    """
+    if TRADE_MODE == "PAPER":
+        return _paper_fill_buy(usd_amount, price_usd)
+
     quote = quote_buy_sfm(usd_amount)
     if quote is None:
         return None
@@ -220,8 +251,15 @@ def buy_sfm(usd_amount: float, wallet_pubkey: str = "", keypair=None) -> Optiona
     return execute_swap(quote, wallet_pubkey, keypair)
 
 
-def sell_sfm(sfm_amount: float, wallet_pubkey: str = "", keypair=None) -> Optional[dict]:
-    """High-level: quote then execute a SELL of sfm_amount SFM for USDC."""
+def sell_sfm(sfm_amount: float, wallet_pubkey: str = "", keypair=None,
+             price_usd: float = 0.0) -> Optional[dict]:
+    """High-level: SELL sfm_amount SFM for USDC.
+    In PAPER mode: simulates fill using live price — no Jupiter call.
+    In LIVE mode: fetches real Jupiter quote and executes swap.
+    """
+    if TRADE_MODE == "PAPER":
+        return _paper_fill_sell(sfm_amount, price_usd)
+
     quote = quote_sell_sfm(sfm_amount)
     if quote is None:
         return None
