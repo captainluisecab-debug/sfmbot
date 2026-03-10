@@ -154,15 +154,27 @@ def compute_signal(
 
     # ── Entry signals ───────────────────────────────────────────────
     if not open_position:
-        # BUY: RSI dipping below oversold threshold + price at or below EMA
-        price_below_ema = price <= ema * 1.002  # within 0.2% of EMA counts as "at"
-        dip = len(closes) >= 3 and closes[-1] <= closes[-2]  # current bar declining
+        # ENTRY 1 — Dip buy: RSI oversold + price at or below EMA
+        price_below_ema = price <= ema * 1.002
+        dip = len(closes) >= 3 and closes[-1] <= closes[-2]
 
         if rsi < RSI_OVERSOLD and (price_below_ema or dip):
             reason = f"oversold rsi={rsi:.1f} ema_gap={((price-ema)/ema*100):.1f}%"
             return Signal("BUY", rsi, ema, atr, price, volume, vol_avg, reason)
 
-        # SELL SHORT / avoid: overbought + extended above EMA
+        # ENTRY 2 — Momentum cross: price just crossed above EMA + RSI building
+        # Catches early breakouts before RSI reaches overbought territory.
+        # Condition: prev close was below EMA, current close is above EMA,
+        #            RSI in 42–56 range (not already overbought).
+        if len(closes) >= 2 and ema > 0:
+            prev_ema = _ema(closes[:-1], EMA_PERIOD)
+            ema_cross_up = closes[-2] < prev_ema and price > ema
+            momentum_rsi = 42.0 <= rsi <= 56.0
+            if ema_cross_up and momentum_rsi:
+                reason = f"ema_cross_up rsi={rsi:.1f} gap={((price-ema)/ema*100):.1f}%"
+                return Signal("BUY", rsi, ema, atr, price, volume, vol_avg, reason)
+
+        # Overbought avoid: RSI extended + price stretched above EMA
         if rsi > RSI_OVERBOUGHT:
             ema_gap_pct = (price - ema) / ema * 100 if ema > 0 else 0
             if ema_gap_pct >= 2.0:
