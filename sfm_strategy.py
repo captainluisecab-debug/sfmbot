@@ -106,6 +106,8 @@ def compute_signal(
     stop_loss_pct: float = 8.0,
     take_profit_pct: float = 15.0,
     scaled_out: bool = False,
+    last_buy_candle_idx: int = -1,
+    cooldown_candles: int = 3,
 ) -> Signal:
     """
     Compute the current trading signal from recent candles.
@@ -153,11 +155,18 @@ def compute_signal(
                           f"trail_exit rsi={rsi:.1f}")
 
     # ── Entry signals — AGGRESSIVE ──────────────────────────────────
+    # Cooldown: don't re-enter within cooldown_candles of last buy
+    if last_buy_candle_idx >= 0 and len(closes) > 0:
+        candles_since_buy = len(closes) - last_buy_candle_idx
+        if candles_since_buy < cooldown_candles:
+            return Signal("HOLD", rsi, ema, atr, price, volume, vol_avg,
+                          f"cooldown {candles_since_buy}/{cooldown_candles}candles")
+
     if not open_position:
         ema_gap_pct = (price - ema) / ema * 100 if ema > 0 else 0
 
-        # ENTRY 1 — Dip buy: RSI below oversold (no EMA required in aggressive mode)
-        if rsi < RSI_OVERSOLD:
+        # ENTRY 1 — Dip buy: RSI below oversold, price within 3% of EMA (not in freefall)
+        if rsi < RSI_OVERSOLD and price > ema * 0.97:
             reason = f"oversold rsi={rsi:.1f} gap={ema_gap_pct:.1f}%"
             return Signal("BUY", rsi, ema, atr, price, volume, vol_avg, reason)
 

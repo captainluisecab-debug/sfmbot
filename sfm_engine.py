@@ -129,6 +129,7 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
     entry_price  = st.position.entry_price if has_position else 0.0
     scaled_out   = st.position.scaled_out  if has_position else False
 
+    last_buy_candle_idx = getattr(st, 'last_buy_candle_idx', -1)
     signal = compute_signal(
         candles=candles,
         open_position=has_position,
@@ -136,6 +137,8 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
         stop_loss_pct=STOP_LOSS_PCT,
         take_profit_pct=TAKE_PROFIT_PCT,
         scaled_out=scaled_out,
+        last_buy_candle_idx=last_buy_candle_idx,
+        cooldown_candles=3,
     )
 
     # Override signal.price with live tick (more accurate than candle close)
@@ -180,6 +183,7 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
                 else:
                     effective_price = price
                 open_position(st, effective_price, trade_usd)
+                st.last_buy_candle_idx = len(candles)
 
     elif signal.action == "SELL" and has_position:
         is_partial = "scale_out" in signal.reason
@@ -199,6 +203,7 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
                 effective_price = price
             pnl = close_position(st, effective_price, sfm_to_sell, signal.reason)
             log.info("[CYCLE %d] PnL this trade: $%.2f", cycle, pnl)
+            st.last_buy_candle_idx = -1
 
     save_state(st)
 

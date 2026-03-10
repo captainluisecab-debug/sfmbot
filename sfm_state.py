@@ -43,6 +43,9 @@ class SFMState:
     # Cycle counter
     cycle: int = 0
 
+    # Cooldown tracking: candle index of last buy (-1 = none)
+    last_buy_candle_idx: int = -1
+
 
 def load_state() -> SFMState:
     if not os.path.exists(STATE_FILE):
@@ -58,6 +61,7 @@ def load_state() -> SFMState:
             winning_trades=raw.get("winning_trades", 0),
             losing_trades=raw.get("losing_trades", 0),
             cycle=raw.get("cycle", 0),
+            last_buy_candle_idx=raw.get("last_buy_candle_idx", -1),
         )
         pos_raw = raw.get("position")
         if pos_raw:
@@ -76,6 +80,7 @@ def save_state(st: SFMState) -> None:
         "winning_trades": st.winning_trades,
         "losing_trades": st.losing_trades,
         "cycle": st.cycle,
+        "last_buy_candle_idx": st.last_buy_candle_idx,
         "position": asdict(st.position) if st.position else None,
     }
     try:
