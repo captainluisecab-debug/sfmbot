@@ -16,6 +16,7 @@ Mode is controlled by TRADE_MODE in .env:
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import sys
@@ -64,6 +65,19 @@ from sfm_state import (
 )
 
 
+def _read_supervisor_cmd() -> dict:
+    """Read supervisor command file if present. Returns defaults if missing."""
+    cmd_path = r"C:\Projects\supervisor\commands\sfm_cmd.json"
+    defaults = {"mode": "NORMAL", "size_mult": 1.0, "entry_allowed": True}
+    try:
+        if os.path.exists(cmd_path):
+            with open(cmd_path, encoding="utf-8") as f:
+                return {**defaults, **json.load(f)}
+    except Exception:
+        pass
+    return defaults
+
+
 def _load_wallet():
     """Load keypair for live trading. Returns None in paper mode."""
     if TRADE_MODE != "LIVE":
@@ -80,6 +94,18 @@ def _load_wallet():
 
 def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
     st.cycle = cycle
+
+    # ── 0. Supervisor command ───────────────────────────────────────
+    cmd = _read_supervisor_cmd()
+    sup_mode    = cmd.get("mode", "NORMAL")
+    size_mult   = float(cmd.get("size_mult", 1.0))
+    entry_ok    = bool(cmd.get("entry_allowed", True))
+
+    if sup_mode == "DEFENSE":
+        log.info("[CYCLE %d] Supervisor: DEFENSE — no new entries", cycle)
+        entry_ok = False
+    elif sup_mode == "SCOUT":
+        size_mult = min(size_mult, 0.5)
 
     # ── 1. Fetch market data ────────────────────────────────────────
     tick = get_best_pair(SFM_MINT)
@@ -135,14 +161,15 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
     )
 
     # ── 3. Execute ──────────────────────────────────────────────────
-    if signal.action == "BUY" and not has_position:
+    if signal.action == "BUY" and not has_position and entry_ok:
         # Don't buy if already at max open exposure
-        if st.usdc_balance < TRADE_SIZE_USD:
+        trade_usd_adj = TRADE_SIZE_USD * size_mult
+        if st.usdc_balance < trade_usd_adj:
             log.warning("[CYCLE %d] Insufficient USDC (%.2f) — skipping buy", cycle, st.usdc_balance)
         elif portfolio_value(st, price) - st.usdc_balance >= MAX_OPEN_USD:
             log.warning("[CYCLE %d] Max open exposure reached — skipping buy", cycle)
         else:
-            trade_usd = min(TRADE_SIZE_USD, st.usdc_balance)
+            trade_usd = min(trade_usd_adj, st.usdc_balance)
             log.info("[CYCLE %d] BUY $%.2f of SFM @ $%.8f", cycle, trade_usd, price)
             fill = buy_sfm(trade_usd, pubkey, keypair)
             if fill:
