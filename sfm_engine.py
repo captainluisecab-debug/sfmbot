@@ -184,6 +184,14 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
                     effective_price = price
                 open_position(st, effective_price, trade_usd)
                 st.last_buy_candle_idx = len(candles)
+                try:
+                    import sys as _sys
+                    if r"C:\Projects\supervisor" not in _sys.path:
+                        _sys.path.insert(0, r"C:\Projects\supervisor")
+                    from supervisor_execution import log_execution
+                    log_execution("sfm", "SFM", "BUY", trade_usd, effective_price, 0.0, signal.reason)
+                except Exception:
+                    pass
 
     elif signal.action == "SELL" and has_position:
         is_partial = "scale_out" in signal.reason
@@ -204,6 +212,14 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
             pnl = close_position(st, effective_price, sfm_to_sell, signal.reason)
             log.info("[CYCLE %d] PnL this trade: $%.2f", cycle, pnl)
             st.last_buy_candle_idx = -1
+            try:
+                import sys as _sys
+                if r"C:\Projects\supervisor" not in _sys.path:
+                    _sys.path.insert(0, r"C:\Projects\supervisor")
+                from supervisor_execution import log_execution
+                log_execution("sfm", "SFM", "SELL", proceeds_usd, effective_price, pnl, signal.reason)
+            except Exception:
+                pass
 
     save_state(st)
 
