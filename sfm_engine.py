@@ -161,7 +161,7 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
     )
 
     pv = portfolio_value(st, price)
-    pnl_pct = ((pv - 1_000.0) / 1_000.0 * 100) if pv else 0.0
+    pnl_pct = ((pv - 2_469.62) / 2_469.62 * 100) if pv else 0.0
 
     log.info(
         "[CYCLE %d] price=$%.8f rsi=%.1f ema=$%.8f signal=%s reason=%s | "

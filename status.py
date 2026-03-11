@@ -11,7 +11,7 @@ import os
 import time
 
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sfm_state.json")
-STARTING_USDC = 1_000.0
+STARTING_USDC = 2_469.62
 
 
 def main():

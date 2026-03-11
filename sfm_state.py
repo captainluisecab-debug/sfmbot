@@ -29,7 +29,7 @@ class Position:
 @dataclass
 class SFMState:
     # Wallet balances (USD equivalent, tracked in paper mode)
-    usdc_balance: float  = 1_000.0  # starting paper USDC
+    usdc_balance: float  = 2_469.62  # starting paper USDC (Phantom wallet baseline 2026-03-10)
 
     # Open position (None if flat)
     position: Optional[Position] = None
@@ -55,7 +55,7 @@ def load_state() -> SFMState:
         with open(STATE_FILE, encoding="utf-8") as f:
             raw = json.load(f)
         st = SFMState(
-            usdc_balance=raw.get("usdc_balance", 1_000.0),
+            usdc_balance=raw.get("usdc_balance", 2_469.62),
             realized_pnl_usd=raw.get("realized_pnl_usd", 0.0),
             total_trades=raw.get("total_trades", 0),
             winning_trades=raw.get("winning_trades", 0),
