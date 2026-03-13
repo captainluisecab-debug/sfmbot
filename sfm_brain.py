@@ -113,3 +113,41 @@ Only include parameters that need changing. Empty changes={{}} means no change n
     except Exception as e:
         log.warning("[BRAIN] cycle=%d error: %s", cycle, e)
         return None
+
+
+def check_escalations(state, cycle: int):
+    """Check for Opus responses and escalate roadblocks to Opus."""
+    try:
+        from escalation_client import RoadblockDetector, write_escalation, read_response, apply_response
+        if not hasattr(check_escalations, "_detector"):
+            check_escalations._detector = RoadblockDetector("sfmbot")
+        det = check_escalations._detector
+
+        win_rate = (state.winning_trades / state.total_trades * 100) if state.total_trades > 0 else 0
+        context  = {
+            "cycle":     cycle,
+            "usdc":      state.usdc_balance,
+            "win_rate":  win_rate,
+            "trades":    state.total_trades,
+            "position":  bool(getattr(state, "position", None)),
+        }
+
+        if state.total_trades > 0:
+            if win_rate < 40:
+                det.tick_loss()
+            else:
+                det.tick_win()
+
+        roadblock = det.detect(context)
+        if roadblock:
+            write_escalation("sfmbot", roadblock)
+
+        resp = read_response("sfmbot")
+        if resp:
+            overrides = load_overrides()
+            new_ov = apply_response(resp, overrides, PARAM_BOUNDS)
+            if new_ov != overrides:
+                save_overrides(new_ov)
+                log.info("[ESCALATION] Applied Opus response: %s", resp.get("decision","")[:80])
+    except Exception as e:
+        log.debug("[ESCALATION] sfmbot client error: %s", e)
