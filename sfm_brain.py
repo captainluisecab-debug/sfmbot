@@ -5,12 +5,14 @@ Writes overrides to sfm_brain_overrides.json which engine reads each cycle.
 """
 from __future__ import annotations
 import json, os, logging
+from datetime import datetime, timezone
 from typing import Optional
 
 log = logging.getLogger("sfm_brain")
 
 BRAIN_EVERY_CYCLES = 10
-OVERRIDES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sfm_brain_overrides.json")
+OVERRIDES_FILE  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sfm_brain_overrides.json")
+DECISIONS_FILE  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sfm_brain_decisions.jsonl")
 
 PARAM_BOUNDS = {
     "STOP_LOSS_PCT":   (3.0, 12.0),
@@ -107,6 +109,17 @@ Only include parameters that need changing. Empty changes={{}} means no change n
                 new_overrides[k] = max(lo, min(hi, float(v)))
 
         save_overrides(new_overrides)
+        try:
+            with open(DECISIONS_FILE, "a", encoding="utf-8") as _f:
+                _f.write(json.dumps({
+                    "ts":         datetime.now(timezone.utc).isoformat(),
+                    "cycle":      cycle,
+                    "old_params": current or {},
+                    "new_params": new_overrides,
+                    "reasoning":  data.get("reasoning", ""),
+                }) + "\n")
+        except Exception as _e:
+            log.warning("sfm_brain_decisions write failed: %s", _e)
         log.info("[BRAIN] cycle=%d overrides updated: %s | %s", cycle, new_overrides, data.get("reasoning", ""))
         return new_overrides
 
