@@ -21,6 +21,7 @@ import logging
 import os
 import sys
 import time
+from datetime import datetime, timezone
 
 # Create logs directory BEFORE setting up file handler
 os.makedirs(
@@ -64,6 +65,33 @@ from sfm_state import (
     save_state,
 )
 from sfm_brain import run_brain as brain_run, load_overrides as brain_overrides
+
+_FEEDBACK_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sfm_supervisor_feedback.json")
+
+
+def _write_supervisor_feedback(st: "SFMState", cycle: int, price: float) -> None:
+    """Write per-cycle feedback for supervisor visibility between escalations."""
+    try:
+        pv = portfolio_value(st, price)
+        peak = getattr(st, "peak_portfolio_val", pv)
+        dd = ((peak - pv) / peak * 100) if peak > 0 else 0.0
+        overrides = brain_overrides()
+        data = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "cycle": cycle,
+            "equity": round(pv, 2),
+            "dd_pct": round(dd, 2),
+            "daily_loss_pct": 0.0,
+            "usdc_balance": round(st.usdc_balance, 2),
+            "open_position": st.position is not None,
+            "effective_params": overrides or {},
+        }
+        tmp = _FEEDBACK_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp, _FEEDBACK_FILE)
+    except Exception as exc:
+        log.warning("sfm_supervisor_feedback write failed: %s", exc)
 
 
 def _read_supervisor_cmd() -> dict:
@@ -198,7 +226,7 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
                     from supervisor_execution import log_execution
                     log_execution("sfm", "SFM", "BUY", trade_usd, effective_price, 0.0, signal.reason)
                 except Exception:
-                    pass
+                    log.warning("[EXEC_LOG] log_execution failed bot=sfm side=BUY sym=SFM", exc_info=True)
 
     elif signal.action == "SELL" and has_position:
         is_partial = "scale_out" in signal.reason
@@ -226,7 +254,7 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
                 from supervisor_execution import log_execution
                 log_execution("sfm", "SFM", "SELL", proceeds_usd, effective_price, pnl, signal.reason)
             except Exception:
-                pass
+                log.warning("[EXEC_LOG] log_execution failed bot=sfm side=SELL sym=SFM", exc_info=True)
 
     # ── Brain — self-tune parameters every 10 cycles ────────────────
     if cycle % 10 == 0:
@@ -247,6 +275,7 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
         brain_run(st, cycle, pos_summary)
 
     save_state(st)
+    _write_supervisor_feedback(st, cycle, price)
 
 
 def main() -> None:
