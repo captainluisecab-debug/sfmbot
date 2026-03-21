@@ -170,7 +170,7 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
     if has_position and scaled_out:
         remaining_cost = st.position.cost_usd
         effective_trade = trade_size * size_mult
-        if remaining_cost < effective_trade * 0.15:
+        if remaining_cost < effective_trade * 0.40:
             log.info("[CYCLE %d] Remnant close: cost=$%.2f < 15%% of $%.2f — closing to free capital",
                      cycle, remaining_cost, effective_trade)
             sfm_to_sell = st.position.sfm_qty
