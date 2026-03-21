@@ -56,6 +56,18 @@ def run_brain(state, cycle: int, position_summary: str) -> Optional[dict]:
     portfolio_val = getattr(state, "portfolio_val", state.usdc_balance)
     dd_pct = getattr(state, "dd_pct", 0.0)
 
+    # Skip API call when all params are at bounds ceiling and performance is good.
+    # The brain would just suggest "increase" again, which is impossible.
+    if current and win_rate >= 40 and dd_pct < 10:
+        at_ceiling = all(
+            current.get(k, 0) >= hi
+            for k, (lo, hi) in PARAM_BOUNDS.items()
+            if k in current
+        )
+        if at_ceiling:
+            log.info("[BRAIN] cycle=%d all params at ceiling, skipping API call", cycle)
+            return None
+
     prompt = f"""You are the local brain for an SFM Solana token swing trading bot.
 
 ## CURRENT STATE

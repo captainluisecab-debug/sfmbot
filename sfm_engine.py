@@ -164,6 +164,29 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
     entry_price  = st.position.entry_price if has_position else 0.0
     scaled_out   = st.position.scaled_out  if has_position else False
 
+    # Remnant close: if already scaled out and remaining cost < 15% of
+    # effective trade size, close the remnant to free capital for a fresh entry.
+    _remnant_closed = False
+    if has_position and scaled_out:
+        remaining_cost = st.position.cost_usd
+        effective_trade = trade_size * size_mult
+        if remaining_cost < effective_trade * 0.15:
+            log.info("[CYCLE %d] Remnant close: cost=$%.2f < 15%% of $%.2f — closing to free capital",
+                     cycle, remaining_cost, effective_trade)
+            sfm_to_sell = st.position.sfm_qty
+            proceeds_usd = sfm_to_sell * price
+            fill = sell_sfm(sfm_to_sell, pubkey, keypair, price_usd=price)
+            if fill:
+                if TRADE_MODE == "LIVE":
+                    usdc_received = fill["out_amount"] / 1e6
+                    effective_price = usdc_received / sfm_to_sell if sfm_to_sell > 0 else price
+                else:
+                    effective_price = price
+                pnl = close_position(st, effective_price, sfm_to_sell, "remnant_close")
+                log.info("[CYCLE %d] Remnant closed: PnL=$%.2f", cycle, pnl)
+                _remnant_closed = True
+                has_position = False
+
     last_buy_candle_idx = getattr(st, 'last_buy_candle_idx', -1)
     signal = compute_signal(
         candles=candles,
