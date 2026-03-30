@@ -230,7 +230,7 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
         elif portfolio_value(st, price) - st.usdc_balance >= MAX_OPEN_USD:
             log.warning("[CYCLE %d] Max open exposure reached — skipping buy", cycle)
         else:
-            trade_usd = min(trade_usd_adj, st.usdc_balance)
+            trade_usd = min(trade_usd_adj, st.usdc_balance, 250.0)  # hard cap: max $250/trade
             log.info("[CYCLE %d] BUY $%.2f of SFM @ $%.8f", cycle, trade_usd, price)
             fill = buy_sfm(trade_usd, pubkey, keypair, price_usd=price)
             if fill:

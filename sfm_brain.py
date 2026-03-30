@@ -17,7 +17,7 @@ DECISIONS_FILE  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sfm_
 PARAM_BOUNDS = {
     "STOP_LOSS_PCT":   (3.0, 12.0),
     "TAKE_PROFIT_PCT": (5.0, 20.0),
-    "TRADE_SIZE_USD":  (100.0, 500.0),
+    "TRADE_SIZE_USD":  (100.0, 250.0),
 }
 
 
