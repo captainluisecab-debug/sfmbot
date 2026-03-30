@@ -135,12 +135,30 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
     sup_mode    = cmd.get("mode", "NORMAL")
     size_mult   = float(cmd.get("size_mult", 1.0))
     entry_ok    = bool(cmd.get("entry_allowed", True))
+    force_flatten = bool(cmd.get("force_flatten", False))
 
     if sup_mode == "DEFENSE":
         log.info("[CYCLE %d] Supervisor: DEFENSE — no new entries", cycle)
         entry_ok = False
     elif sup_mode == "SCOUT":
         size_mult = min(size_mult, 0.5)
+
+    # Governor FORCE_FLATTEN: close position immediately
+    if force_flatten and st.position is not None:
+        log.warning("[CYCLE %d] GOVERNOR FORCE_FLATTEN: closing SFM position", cycle)
+        sfm_to_sell = st.position.sfm_qty
+        fill = sell_sfm(sfm_to_sell, pubkey, keypair, price_usd=0)
+        if fill:
+            if TRADE_MODE == "LIVE":
+                effective_price = fill["out_amount"] / 1e6 / sfm_to_sell if sfm_to_sell > 0 else 0
+            else:
+                tick = get_best_pair(SFM_MINT)
+                effective_price = tick.price_usd if tick else 0
+            pnl = close_position(st, effective_price, sfm_to_sell, "governor_force_flatten")
+            log.info("[CYCLE %d] FORCE_FLATTEN complete: PnL=$%.2f", cycle, pnl)
+        save_state(st)
+        _write_supervisor_feedback(st, cycle, effective_price if 'effective_price' in dir() else 0)
+        return
 
     # ── 1. Fetch market data ────────────────────────────────────────
     tick = get_best_pair(SFM_MINT)
