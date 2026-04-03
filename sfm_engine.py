@@ -1,5 +1,8 @@
 """
-sfm_engine.py — Main trading loop for SFM swing bot.
+sfm_engine.py — SLEEVE: SFM — Execute and Obey.
+Does NOT invent policy. Obeys Governor commands. Goal: positive PnL.
+
+Main trading loop for SFM swing bot.
 
 Cycle every CYCLE_SEC seconds:
   1. Fetch current price + candles from DexScreener
