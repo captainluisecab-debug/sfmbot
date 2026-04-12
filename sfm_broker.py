@@ -1,12 +1,12 @@
 """
-sfm_broker.py — Jupiter v6 aggregator for SFM swaps on Solana.
+sfm_broker.py — Jupiter aggregator for SFM swaps on Solana.
 
 In PAPER mode: quotes are fetched (real prices) but no transaction is sent.
 In LIVE mode: quotes → swap transaction → sign → submit to RPC.
 
-Jupiter API v6 (free, no API key):
-  Quote: GET https://quote-api.jup.ag/v6/quote
-  Swap:  POST https://quote-api.jup.ag/v6/swap
+Jupiter API (free, no API key) — migrated from v6 to swap/v1 (2026-04-12):
+  Quote: GET https://api.jup.ag/swap/v1/quote
+  Swap:  POST https://api.jup.ag/swap/v1/swap
 
 Token mint addresses:
   USDC (Solana): EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
@@ -32,8 +32,8 @@ from sfm_settings import (
 
 log = logging.getLogger("sfm_broker")
 
-JUPITER_QUOTE_URL = "https://quote-api.jup.ag/v6/quote"
-JUPITER_SWAP_URL  = "https://quote-api.jup.ag/v6/swap"
+JUPITER_QUOTE_URL = "https://api.jup.ag/swap/v1/quote"
+JUPITER_SWAP_URL  = "https://api.jup.ag/swap/v1/swap"
 
 # Solana token mints
 USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
