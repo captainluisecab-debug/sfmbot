@@ -154,6 +154,16 @@ def compute_signal(
             return Signal("SELL", rsi, ema, atr, price, volume, vol_avg,
                           f"scale_out_50pct ({pnl_pct:.1f}%)")
 
+        # Trail lock after scale-out: protect the remaining 50%.
+        # Track peak price since entry, exit if price drops 2% from peak.
+        if scaled_out and len(closes) >= 2:
+            peak = max(closes[-20:]) if len(closes) >= 20 else max(closes)
+            drawback_pct = (peak - price) / peak * 100 if peak > 0 else 0
+            if drawback_pct >= 2.0:
+                peak_pnl = (peak - entry_price) / entry_price * 100 if entry_price > 0 else 0
+                return Signal("SELL", rsi, ema, atr, price, volume, vol_avg,
+                              f"trail_lock ({pnl_pct:.1f}%, peak +{peak_pnl:.1f}%, drawback -{drawback_pct:.1f}%)")
+
         # Trailing stop: if price falls back below EMA after being above it
         # (only relevant after a good run)
         if pnl_pct > 5.0 and rsi > RSI_OVERBOUGHT and price < ema:
