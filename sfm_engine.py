@@ -157,6 +157,7 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
             else:
                 tick = get_best_pair(SFM_MINT)
                 effective_price = tick.price_usd if tick else 0
+            st.last_buy_candle_idx = -1
             pnl = close_position(st, effective_price, sfm_to_sell, "governor_force_flatten")
             log.info("[CYCLE %d] FORCE_FLATTEN complete: PnL=$%.2f", cycle, pnl)
         save_state(st)
@@ -274,7 +275,9 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
 
     elif signal.action == "SELL" and has_position:
         is_partial = "scale_out" in signal.reason
-        sfm_to_sell = st.position.sfm_qty * (0.5 if is_partial else 1.0)
+        is_warning = "warning_30pct" in signal.reason
+        sell_pct = 0.5 if is_partial else 0.3 if is_warning else 1.0
+        sfm_to_sell = st.position.sfm_qty * sell_pct
         proceeds_usd = sfm_to_sell * price
 
         log.info(
@@ -288,9 +291,9 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
                 effective_price = usdc_received / sfm_to_sell if sfm_to_sell > 0 else price
             else:
                 effective_price = price
+            st.last_buy_candle_idx = -1
             pnl = close_position(st, effective_price, sfm_to_sell, signal.reason)
             log.info("[CYCLE %d] PnL this trade: $%.2f", cycle, pnl)
-            st.last_buy_candle_idx = -1
             try:
                 import sys as _sys
                 if r"C:\Projects\supervisor" not in _sys.path:
@@ -316,7 +319,12 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
             )
         else:
             pos_summary = "none"
-        brain_run(st, cycle, pos_summary)
+        # Local-first: skip brain API call when entries blocked AND no position
+        # Brain only adds value when it can adjust params for an active trade or upcoming entry
+        if entry_ok or st.position is not None:
+            brain_run(st, cycle, pos_summary)
+        elif cycle % 100 == 0:
+            log.info("[BRAIN] Skipped — no position and entry_allowed=false")
 
     save_state(st)
     _write_supervisor_feedback(st, cycle, price)

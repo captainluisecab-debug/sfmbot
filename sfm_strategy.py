@@ -133,7 +133,13 @@ def compute_signal(
     if open_position and entry_price > 0:
         pnl_pct = (price - entry_price) / entry_price * 100
 
-        # Stop loss
+        # Graduated exit: at -3%, sell 30% as warning before full stop at -5%
+        if pnl_pct <= -(stop_loss_pct * 0.6) and pnl_pct > -stop_loss_pct:
+            if not scaled_out:  # reuse scaled_out flag — first partial exit
+                return Signal("SELL", rsi, ema, atr, price, volume, vol_avg,
+                              f"stop_warning_30pct ({pnl_pct:.1f}%)")
+
+        # Stop loss (full exit on remaining position)
         if pnl_pct <= -stop_loss_pct:
             return Signal("SELL", rsi, ema, atr, price, volume, vol_avg,
                           f"stop_loss ({pnl_pct:.1f}%)")
