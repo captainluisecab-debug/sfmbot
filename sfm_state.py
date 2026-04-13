@@ -66,6 +66,10 @@ def load_state() -> SFMState:
         pos_raw = raw.get("position")
         if pos_raw:
             st.position = Position(**pos_raw)
+        if st.position is None and st.last_buy_candle_idx >= 0:
+            log.warning("Self-heal: last_buy_candle_idx=%d with no position — resetting to -1",
+                        st.last_buy_candle_idx)
+            st.last_buy_candle_idx = -1
         return st
     except Exception as exc:
         log.error("Failed to load state: %s — starting fresh", exc)
@@ -84,8 +88,10 @@ def save_state(st: SFMState) -> None:
         "position": asdict(st.position) if st.position else None,
     }
     try:
-        with open(STATE_FILE, "w", encoding="utf-8") as f:
+        _tmp = STATE_FILE + ".tmp"
+        with open(_tmp, "w", encoding="utf-8") as f:
             json.dump(raw, f, indent=2)
+        os.replace(_tmp, STATE_FILE)
     except Exception as exc:
         log.error("Failed to save state: %s", exc)
 
