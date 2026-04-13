@@ -158,6 +158,7 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
                 tick = get_best_pair(SFM_MINT)
                 effective_price = tick.price_usd if tick else 0
             st.last_buy_candle_idx = -1
+            st.stop_warned = False
             pnl = close_position(st, effective_price, sfm_to_sell, "governor_force_flatten")
             log.info("[CYCLE %d] FORCE_FLATTEN complete: PnL=$%.2f", cycle, pnl)
         save_state(st)
@@ -210,6 +211,7 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
                 has_position = False
 
     last_buy_candle_idx = getattr(st, 'last_buy_candle_idx', -1)
+    _stop_warned = bool(getattr(st, 'stop_warned', False))
     signal = compute_signal(
         candles=candles,
         open_position=has_position,
@@ -217,6 +219,7 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
         stop_loss_pct=stop_loss,
         take_profit_pct=take_profit,
         scaled_out=scaled_out,
+        stop_warned=_stop_warned,
         last_buy_candle_idx=last_buy_candle_idx,
         cooldown_candles=3,
     )
@@ -276,6 +279,8 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
     elif signal.action == "SELL" and has_position:
         is_partial = "scale_out" in signal.reason
         is_warning = "warning_30pct" in signal.reason
+        if is_warning:
+            st.stop_warned = True  # track that warning fired (persists across cycles)
         sell_pct = 0.5 if is_partial else 0.3 if is_warning else 1.0
         sfm_to_sell = st.position.sfm_qty * sell_pct
         proceeds_usd = sfm_to_sell * price
@@ -292,6 +297,7 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
             else:
                 effective_price = price
             st.last_buy_candle_idx = -1
+            st.stop_warned = False  # reset warning flag on position close
             pnl = close_position(st, effective_price, sfm_to_sell, signal.reason)
             log.info("[CYCLE %d] PnL this trade: $%.2f", cycle, pnl)
             try:

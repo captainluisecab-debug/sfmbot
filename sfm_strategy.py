@@ -106,6 +106,7 @@ def compute_signal(
     stop_loss_pct: float = 8.0,
     take_profit_pct: float = 15.0,
     scaled_out: bool = False,
+    stop_warned: bool = False,
     last_buy_candle_idx: int = -1,
     cooldown_candles: int = 3,
 ) -> Signal:
@@ -134,8 +135,9 @@ def compute_signal(
         pnl_pct = (price - entry_price) / entry_price * 100
 
         # Graduated exit: at -3%, sell 30% as warning before full stop at -5%
+        # Uses dedicated stop_warned flag — NOT scaled_out (which tracks profit scale-outs)
         if pnl_pct <= -(stop_loss_pct * 0.6) and pnl_pct > -stop_loss_pct:
-            if not scaled_out:  # reuse scaled_out flag — first partial exit
+            if not stop_warned:
                 return Signal("SELL", rsi, ema, atr, price, volume, vol_avg,
                               f"stop_warning_30pct ({pnl_pct:.1f}%)")
 
