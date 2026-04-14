@@ -1,0 +1,5 @@
+{
+  "STOP_LOSS_PCT": 5.0,
+  "TAKE_PROFIT_PCT": 8.0,
+  "TRADE_SIZE_USD": 200.0
+}

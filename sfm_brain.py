@@ -15,9 +15,9 @@ OVERRIDES_FILE  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sfm_
 DECISIONS_FILE  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sfm_brain_decisions.jsonl")
 
 PARAM_BOUNDS = {
-    "STOP_LOSS_PCT":   (3.0, 12.0),
-    "TAKE_PROFIT_PCT": (5.0, 20.0),
-    "TRADE_SIZE_USD":  (100.0, 250.0),
+    "STOP_LOSS_PCT":   (3.0, 7.0),    # centered on 5% (our deployed target)
+    "TAKE_PROFIT_PCT": (5.0, 12.0),   # centered on 8% (our deployed target)
+    "TRADE_SIZE_USD":  (100.0, 300.0), # room to grow on strong performance
 }
 
 
@@ -56,18 +56,6 @@ def run_brain(state, cycle: int, position_summary: str) -> Optional[dict]:
     portfolio_val = getattr(state, "portfolio_val", state.usdc_balance)
     dd_pct = getattr(state, "dd_pct", 0.0)
 
-    # Skip API call when all params are at bounds ceiling and performance is good.
-    # The brain would just suggest "increase" again, which is impossible.
-    if current and win_rate >= 40 and dd_pct < 10:
-        at_ceiling = all(
-            current.get(k, 0) >= hi
-            for k, (lo, hi) in PARAM_BOUNDS.items()
-            if k in current
-        )
-        if at_ceiling:
-            log.info("[BRAIN] cycle=%d all params at ceiling, skipping API call", cycle)
-            return None
-
     prompt = f"""You are the local brain for an SFM Solana token swing trading bot.
 
 ## CURRENT STATE
@@ -88,58 +76,50 @@ For high-volatility Solana tokens, wider stops and targets are generally appropr
 Respond ONLY with valid JSON: {{"changes":{{}}, "reasoning":"one sentence"}}
 Only include parameters that need changing. Empty changes={{}} means no change needed."""
 
+    # Deterministic rule engine — no API call, zero cost
+    params = dict(current or {"STOP_LOSS_PCT": 8.0, "TAKE_PROFIT_PCT": 15.0, "TRADE_SIZE_USD": 100.0})
+    changes = {}
+    if win_rate < 40 and state.total_trades > 0:
+        changes["STOP_LOSS_PCT"] = max(params.get("STOP_LOSS_PCT", 8.0) - 1.0, PARAM_BOUNDS["STOP_LOSS_PCT"][0])
+        changes["TRADE_SIZE_USD"] = max(params.get("TRADE_SIZE_USD", 100.0) * 0.85, PARAM_BOUNDS["TRADE_SIZE_USD"][0])
+        reasoning = f"Win rate {win_rate:.0f}% < 40%: tightened stop loss, reduced trade size"
+    elif dd_pct > 10:
+        changes["TRADE_SIZE_USD"] = max(params.get("TRADE_SIZE_USD", 100.0) * 0.70, PARAM_BOUNDS["TRADE_SIZE_USD"][0])
+        reasoning = f"Drawdown {dd_pct:.1f}% > 10%: reduced trade size significantly"
+    elif win_rate > 60 and dd_pct < 5 and state.total_trades > 0:
+        changes["TRADE_SIZE_USD"] = min(params.get("TRADE_SIZE_USD", 100.0) * 1.10, PARAM_BOUNDS["TRADE_SIZE_USD"][1])
+        changes["TAKE_PROFIT_PCT"] = min(params.get("TAKE_PROFIT_PCT", 15.0) + 0.5, PARAM_BOUNDS["TAKE_PROFIT_PCT"][1])
+        reasoning = f"Win rate {win_rate:.0f}% > 60%, DD {dd_pct:.1f}% < 5%: increased size and TP"
+    else:
+        reasoning = f"No rule triggered (win_rate={win_rate:.0f}%, dd={dd_pct:.1f}%): holding params"
+
+    new_overrides = dict(current or {})
+    for k, v in changes.items():
+        if k in PARAM_BOUNDS:
+            lo, hi = PARAM_BOUNDS[k]
+            new_overrides[k] = round(max(lo, min(hi, float(v))), 2)
+
+    # Audit trail — record every brain decision, including no-change
     try:
-        import anthropic
-        client = anthropic.Anthropic()
-        resp = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=256,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        raw = resp.content[0].text.strip()
-        # Strip markdown code fences if Claude wrapped the JSON
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-            raw = raw.strip()
-        if not raw:
-            log.warning("[BRAIN] cycle=%d empty response from Claude", cycle)
-            return None
-        data = json.loads(raw)
-        changes = data.get("changes", {})
+        with open(DECISIONS_FILE, "a", encoding="utf-8") as _f:
+            _f.write(json.dumps({
+                "ts":         datetime.now(timezone.utc).isoformat(),
+                "cycle":      cycle,
+                "old_params": current or {},
+                "new_params": new_overrides,
+                "reasoning":  reasoning,
+                "source":     "local_rules",
+            }) + "\n")
+    except Exception as _e:
+        log.warning("sfm_brain_decisions write failed: %s", _e)
 
-        # Apply bounds to any proposed changes
-        new_overrides = dict(current or {})
-        for k, v in changes.items():
-            if k in PARAM_BOUNDS:
-                lo, hi = PARAM_BOUNDS[k]
-                new_overrides[k] = max(lo, min(hi, float(v)))
-
-        # Audit trail — record every brain decision, including no-change
-        try:
-            with open(DECISIONS_FILE, "a", encoding="utf-8") as _f:
-                _f.write(json.dumps({
-                    "ts":         datetime.now(timezone.utc).isoformat(),
-                    "cycle":      cycle,
-                    "old_params": current or {},
-                    "new_params": new_overrides,
-                    "reasoning":  data.get("reasoning", ""),
-                }) + "\n")
-        except Exception as _e:
-            log.warning("sfm_brain_decisions write failed: %s", _e)
-
-        if not changes:
-            log.info("[BRAIN] cycle=%d no parameter changes needed | %s", cycle, data.get("reasoning", ""))
-            return None
-
-        save_overrides(new_overrides)
-        log.info("[BRAIN] cycle=%d overrides updated: %s | %s", cycle, new_overrides, data.get("reasoning", ""))
-        return new_overrides
-
-    except Exception as e:
-        log.warning("[BRAIN] cycle=%d error: %s", cycle, e)
+    if not changes:
+        log.info("[BRAIN] cycle=%d no parameter changes needed | %s", cycle, reasoning)
         return None
+
+    save_overrides(new_overrides)
+    log.info("[BRAIN] cycle=%d overrides updated: %s | %s", cycle, new_overrides, reasoning)
+    return new_overrides
 
 
 def check_escalations(state, cycle: int):
