@@ -37,7 +37,7 @@ from sfm_data import Candle
 log = logging.getLogger("sfm_strategy")
 
 # ── Signal thresholds — AGGRESSIVE PAPER MODE ───────────────────────
-RSI_OVERSOLD   = 58.0   # buy any pullback below 58 — catches much more
+RSI_OVERSOLD   = 30.0   # buy any pullback below 30 — catches much more
 RSI_OVERBOUGHT = 75.0   # hold positions much longer, exit only at extreme
 EMA_PERIOD     = 20
 RSI_PERIOD     = 14

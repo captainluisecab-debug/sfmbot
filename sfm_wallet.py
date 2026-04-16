@@ -65,19 +65,24 @@ def public_key_str(keypair) -> str:
 
 def sign_transaction(keypair, transaction_bytes: bytes) -> bytes:
     """
-    Sign a raw transaction message with the keypair.
-    Returns signed transaction bytes ready to submit.
-
-    Note: Jupiter returns a base64-encoded transaction that needs to be
-    decoded, signed, and re-serialized. This helper is called by sfm_broker.
+    Sign a Jupiter swap transaction (v1 API returns VersionedTransaction).
+    Uses raw-byte surgery to avoid solders serialization issues:
+    wire format = [compact-u16 sig count][N * 64-byte sigs][message bytes].
     """
-    try:
-        from solders.transaction import Transaction  # type: ignore
-        from solders.message import Message  # type: ignore
-        import base64
+    import base64
+    raw = bytearray(base64.b64decode(transaction_bytes))
 
-        tx = Transaction.from_bytes(base64.b64decode(transaction_bytes))
-        tx.sign([keypair], tx.message.recent_blockhash)
-        return bytes(tx)
-    except Exception as exc:
-        raise RuntimeError(f"Transaction signing failed: {exc}") from exc
+    num_sigs = raw[0]
+    if num_sigs == 0:
+        raise RuntimeError("Transaction has 0 signature slots")
+
+    msg_offset = 1 + num_sigs * 64
+    msg_bytes = bytes(raw[msg_offset:])
+
+    sig = keypair.sign_message(msg_bytes)
+    sig_bytes = bytes(sig)
+    if len(sig_bytes) != 64:
+        raise RuntimeError(f"Signature length {len(sig_bytes)}, expected 64")
+
+    raw[1:65] = sig_bytes
+    return bytes(raw)

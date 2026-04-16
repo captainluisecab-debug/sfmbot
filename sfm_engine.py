@@ -247,7 +247,25 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
     )
 
     # ── 3. Execute ──────────────────────────────────────────────────
-    if signal.action == "BUY" and not has_position and entry_ok:
+    # Load outcome analyzer recommendations
+    _oa_block = False
+    try:
+        _oa_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sfm_score_adjustments.json")
+        if os.path.exists(_oa_path):
+            _oa = json.load(open(_oa_path))
+            _recs = _oa.get("recommendations", {})
+            if any(k.startswith("disable_") for k in _recs):
+                _blocked_signals = [k.replace("disable_", "") for k in _recs if k.startswith("disable_")]
+                if signal.reason in _blocked_signals:
+                    _oa_block = True
+                    log.info("[ANALYZER] Entry signal '%s' blocked by outcome analyzer", signal.reason)
+            if _recs.get("tighten_rsi") and signal.rsi > 50:
+                _oa_block = True
+                log.info("[ANALYZER] RSI %.1f > 50 blocked by tighten_rsi recommendation", signal.rsi)
+    except Exception:
+        pass
+
+    if signal.action == "BUY" and not has_position and entry_ok and not _oa_block:
         # Don't buy if already at max open exposure
         trade_usd_adj = trade_size * size_mult
         if st.usdc_balance < trade_usd_adj:
@@ -266,6 +284,7 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
                 else:
                     effective_price = price
                 open_position(st, effective_price, trade_usd)
+                st._last_entry_signal = signal.reason
                 st.last_buy_candle_idx = len(candles)
                 try:
                     import sys as _sys
@@ -301,6 +320,20 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
             pnl = close_position(st, effective_price, sfm_to_sell, signal.reason)
             log.info("[CYCLE %d] PnL this trade: $%.2f", cycle, pnl)
             try:
+                from sfm_outcome_analyzer import log_trade as _log_outcome
+                _entry_ts = st.position.entry_ts if hasattr(st, 'position') and st.position else 0
+                _hold = int(time.time()) - _entry_ts if _entry_ts > 0 else 0
+                _log_outcome(
+                    entry_signal=getattr(st, '_last_entry_signal', 'unknown'),
+                    exit_reason=signal.reason, pnl_usd=pnl,
+                    entry_price=st.position.entry_price if st.position else 0,
+                    exit_price=effective_price, hold_sec=_hold,
+                    rsi_at_entry=0, rsi_at_exit=signal.rsi,
+                    entry_ts=_entry_ts,
+                )
+            except Exception:
+                log.warning("[OUTCOME] trade log failed", exc_info=True)
+            try:
                 import sys as _sys
                 if r"C:\Projects\supervisor" not in _sys.path:
                     _sys.path.insert(0, r"C:\Projects\supervisor")
@@ -308,6 +341,14 @@ def _run_cycle(st: SFMState, keypair, pubkey: str, cycle: int) -> None:
                 log_execution("sfm", "SFM", "SELL", proceeds_usd, effective_price, pnl, signal.reason)
             except Exception:
                 log.warning("[EXEC_LOG] log_execution failed bot=sfm side=SELL sym=SFM", exc_info=True)
+
+    # ── Outcome analyzer — run every 6 cycles (~30 min) ──────────────
+    if cycle % 6 == 0 and cycle > 0:
+        try:
+            from sfm_outcome_analyzer import run_analyzer as _run_oa
+            _run_oa()
+        except Exception:
+            log.warning("[OUTCOME] analyzer run failed", exc_info=True)
 
     # ── Brain — self-tune parameters every 10 cycles ────────────────
     if cycle % 10 == 0:

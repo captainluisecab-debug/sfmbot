@@ -99,6 +99,45 @@ Only include parameters that need changing. Empty changes={{}} means no change n
             lo, hi = PARAM_BOUNDS[k]
             new_overrides[k] = round(max(lo, min(hi, float(v))), 2)
 
+    # Adaptive brain: conditionally call Opus for param refinement
+    _brain_source = "local_rules"
+    try:
+        import sys as _sys
+        if r"C:\Projects\supervisor" not in _sys.path:
+            _sys.path.insert(0, r"C:\Projects\supervisor")
+        from adaptive_brain import _should_review, review_sleeve, apply_recommendations, log_review
+        _review_state = {
+            "last_review_ts": globals().get("_sfm_last_review_ts", 0),
+            "recent_win_rate": win_rate,
+            "overall_win_rate": win_rate,
+            "dd_trend": -dd_pct if dd_pct > 0 else 0,
+            "regime_changed_since_review": False,
+            "trades_since_review": state.total_trades - globals().get("_sfm_trades_at_review", 0),
+        }
+        _do_review, _trigger = _should_review(_review_state)
+        if _do_review:
+            _oa_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sfm_score_adjustments.json")
+            _outcome = json.load(open(_oa_path)) if os.path.exists(_oa_path) else {}
+            _result = review_sleeve(
+                sleeve_name="sfm",
+                current_params=new_overrides,
+                hard_bounds=PARAM_BOUNDS,
+                outcome_summary=_outcome,
+                recent_trades=[],
+                market_context={"dd_pct": dd_pct, "win_rate": win_rate},
+                portfolio_context={"usdc": state.usdc_balance, "position": bool(state.position)},
+            )
+            if _result and _result.get("action") == "adjust":
+                new_overrides, _changes = apply_recommendations(new_overrides, _result, PARAM_BOUNDS)
+                log_review("sfm", _trigger, _result, _changes)
+                if _changes:
+                    reasoning += f" | opus: {_result.get('reasoning','')}"
+                    _brain_source = "local_rules+opus"
+            globals()["_sfm_last_review_ts"] = time.time()
+            globals()["_sfm_trades_at_review"] = state.total_trades
+    except Exception as _exc:
+        log.warning("[BRAIN] Adaptive review failed: %s", _exc)
+
     # Audit trail — record every brain decision, including no-change
     try:
         with open(DECISIONS_FILE, "a", encoding="utf-8") as _f:
@@ -108,7 +147,7 @@ Only include parameters that need changing. Empty changes={{}} means no change n
                 "old_params": current or {},
                 "new_params": new_overrides,
                 "reasoning":  reasoning,
-                "source":     "local_rules",
+                "source":     _brain_source,
             }) + "\n")
     except Exception as _e:
         log.warning("sfm_brain_decisions write failed: %s", _e)
