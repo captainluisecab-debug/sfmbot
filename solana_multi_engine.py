@@ -72,9 +72,9 @@ def _fetch_candles(pair_cfg: PairConfig) -> dict:
         if not candles or len(candles) < 30:
             return {}
 
-        closes = [c["close"] for c in candles]
-        highs = [c["high"] for c in candles]
-        lows = [c["low"] for c in candles]
+        closes = [c.close for c in candles]
+        highs = [c.high for c in candles]
+        lows = [c.low for c in candles]
 
         return {
             "price": tick.price_usd,
