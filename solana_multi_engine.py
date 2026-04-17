@@ -331,17 +331,37 @@ def run():
                     log.info("[%s] Bought %.4f @ $%.6f (cost=$%.2f)",
                              pair_name, base_received, eff_price, trade_usd)
 
-            # Portfolio summary
+            # Portfolio summary — include native SOL in equity
             total_deployed = sum(p.cost_usd for p in st.positions.values())
-            equity = st.usdc_balance + total_deployed
+            sol_usd = 0.0
+            try:
+                import requests as _req
+                _sol_resp = _req.post(SOLANA_RPC, json={
+                    "jsonrpc": "2.0", "id": 1, "method": "getBalance",
+                    "params": [_wallet_pubkey]}, timeout=10)
+                _sol = _sol_resp.json().get("result", {}).get("value", 0) / 1e9
+                # Get SOL price from latest tick data (reuse any SOL pair data from this cycle)
+                _sol_px = 0
+                try:
+                    from sfm_data import get_best_pair as _gbp
+                    _sol_tick = _gbp("So11111111111111111111111111111111111111112")
+                    _sol_px = _sol_tick.price_usd if _sol_tick else 0
+                except Exception:
+                    _sol_px = 88.0  # fallback
+                sol_usd = _sol * _sol_px
+                st.sol_balance = _sol
+                st.sol_usd = round(sol_usd, 2)
+            except Exception:
+                pass
+            equity = st.usdc_balance + total_deployed + sol_usd
             if equity > st.peak_equity:
                 st.peak_equity = equity
             dd = (equity - st.peak_equity) / st.peak_equity * 100 if st.peak_equity > 0 else 0
             wr = st.winning_trades / st.total_trades * 100 if st.total_trades > 0 else 0
 
             pos_str = ", ".join(f"{p}(${v.cost_usd:.0f})" for p, v in st.positions.items()) or "flat"
-            log.info("[CYCLE %d] equity=$%.2f usdc=$%.2f deployed=$%.2f dd=%.1f%% rpnl=$%.2f wr=%.0f%% | %s",
-                     cycle, equity, st.usdc_balance, total_deployed, dd, st.realized_pnl_usd, wr, pos_str)
+            log.info("[CYCLE %d] equity=$%.2f usdc=$%.2f sol=$%.2f deployed=$%.2f dd=%.1f%% rpnl=$%.2f wr=%.0f%% | %s",
+                     cycle, equity, st.usdc_balance, sol_usd, total_deployed, dd, st.realized_pnl_usd, wr, pos_str)
 
             save_state(st)
 

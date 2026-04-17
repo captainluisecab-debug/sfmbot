@@ -35,6 +35,8 @@ class Position:
 @dataclass
 class SolanaState:
     usdc_balance: float = 0.0
+    sol_balance: float = 0.0
+    sol_usd: float = 0.0
     positions: Dict[str, Position] = field(default_factory=dict)
     realized_pnl_usd: float = 0.0
     total_trades: int = 0
@@ -72,6 +74,8 @@ def load_state() -> SolanaState:
 def save_state(st: SolanaState) -> None:
     raw = {
         "usdc_balance": st.usdc_balance,
+        "sol_balance": getattr(st, "sol_balance", 0.0),
+        "sol_usd": getattr(st, "sol_usd", 0.0),
         "realized_pnl_usd": st.realized_pnl_usd,
         "total_trades": st.total_trades,
         "winning_trades": st.winning_trades,
