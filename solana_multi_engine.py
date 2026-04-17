@@ -331,11 +331,26 @@ def run():
                     log.info("[%s] Bought %.4f @ $%.6f (cost=$%.2f)",
                              pair_name, base_received, eff_price, trade_usd)
 
+            # Sync USDC balance from wallet each cycle (detect deposits)
+            try:
+                import requests as _req
+                _usdc_resp = _req.post(SOLANA_RPC, json={
+                    "jsonrpc": "2.0", "id": 99, "method": "getTokenAccountsByOwner",
+                    "params": [_wallet_pubkey,
+                               {"mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"},
+                               {"encoding": "jsonParsed"}]}, timeout=10)
+                for _ua in _usdc_resp.json().get("result", {}).get("value", []):
+                    _wallet_usdc = float(_ua["account"]["data"]["parsed"]["info"]["tokenAmount"]["uiAmount"] or 0)
+                    if abs(_wallet_usdc - st.usdc_balance) > 1.0:
+                        log.info("[SYNC] USDC wallet=$%.2f state=$%.2f — syncing", _wallet_usdc, st.usdc_balance)
+                        st.usdc_balance = _wallet_usdc
+            except Exception:
+                pass
+
             # Portfolio summary — include native SOL in equity
             total_deployed = sum(p.cost_usd for p in st.positions.values())
             sol_usd = 0.0
             try:
-                import requests as _req
                 _sol_resp = _req.post(SOLANA_RPC, json={
                     "jsonrpc": "2.0", "id": 1, "method": "getBalance",
                     "params": [_wallet_pubkey]}, timeout=10)
