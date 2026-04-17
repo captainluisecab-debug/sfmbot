@@ -33,6 +33,8 @@ class PairConfig:
     enabled: bool
 
 
+JITOSOL_POOL = "AxHPCGeEMXfZMqGdUWSiGiGMdR9sCKJFhWDnBmqy5K6L"  # JitoSOL/SOL Orca pool
+
 PAIR_CONFIGS = {
     "SOL/USDC": PairConfig(
         name="SOL/USDC",
@@ -49,6 +51,23 @@ PAIR_CONFIGS = {
         rsi_overbought=72.0,
         ema_period=20,
         min_score=60.0,
+        enabled=True,
+    ),
+    "JITOSOL/SOL": PairConfig(
+        name="JITOSOL/SOL",
+        base_mint=JITOSOL_MINT,
+        quote_mint=SOL_MINT,
+        base_decimals=9,
+        quote_decimals=9,
+        strategy_type="yield",
+        max_allocation_pct=30.0,
+        slippage_bps=30,
+        stop_loss_pct=2.0,
+        take_profit_pct=3.0,
+        rsi_oversold=30.0,
+        rsi_overbought=70.0,
+        ema_period=20,
+        min_score=40.0,
         enabled=True,
     ),
     "SFM/USDC": PairConfig(

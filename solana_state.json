@@ -1,0 +1,42 @@
+{
+  "usdc_balance": 0.0,
+  "realized_pnl_usd": 105.2,
+  "total_trades": 1,
+  "winning_trades": 1,
+  "losing_trades": 0,
+  "cycle": 0,
+  "peak_equity": 722.23,
+  "positions": {
+    "SFM/USDC": {
+      "pair": "SFM/USDC",
+      "base_qty": 134698825.112984,
+      "entry_price": 2.238e-06,
+      "cost_usd": 301.46,
+      "entry_ts": 1776395616,
+      "entry_signal": "manual_takeover",
+      "scaled_out": false,
+      "stop_warned": false,
+      "breakeven_armed": false,
+      "peak_pnl_pct": 0.0
+    },
+    "JITOSOL/SOL": {
+      "pair": "JITOSOL/SOL",
+      "base_qty": 2.655841,
+      "entry_price": 94.92120000000001,
+      "cost_usd": 252.1,
+      "entry_ts": 1776395616,
+      "entry_signal": "manual_takeover",
+      "scaled_out": false,
+      "stop_warned": false,
+      "breakeven_armed": false,
+      "peak_pnl_pct": 0.0
+    }
+  },
+  "pair_stats": {
+    "SFM/USDC": {
+      "trades": 1,
+      "wins": 1,
+      "pnl": 105.2
+    }
+  }
+}

@@ -26,7 +26,7 @@ PYTHON        = sys.executable
 CHECK_SEC     = 30
 RESTART_DELAY = 5
 
-PROCESS = {"name": "sfm_engine", "script": "sfm_engine.py", "proc": None, "restarts": 0}
+PROCESS = {"name": "solana_multi_engine", "script": "solana_multi_engine.py", "proc": None, "restarts": 0}
 
 
 def start_process(entry: dict) -> None:
@@ -41,7 +41,7 @@ def start_process(entry: dict) -> None:
 
 def main() -> None:
     log.info("=" * 50)
-    log.info("SFM BOT WATCHDOG")
+    log.info("SOLANA MULTI-PAIR WATCHDOG")
     log.info("Check interval: %ds | Restart delay: %ds", CHECK_SEC, RESTART_DELAY)
     log.info("=" * 50)
 
