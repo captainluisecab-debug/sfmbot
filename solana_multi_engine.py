@@ -62,15 +62,13 @@ def _init_wallet():
 def _fetch_candles(pair_cfg: PairConfig) -> dict:
     """Fetch 15-min candles from DexScreener/GeckoTerminal for a pair."""
     try:
-        from sfm_data import Tick, get_best_pair
-        import requests
+        from sfm_data import get_best_pair
 
-        # Use DexScreener to find the best pool for this pair's base token
         tick = get_best_pair(pair_cfg.base_mint)
         if not tick:
             return {}
 
-        candles = get_candles(tick.pool_address, tick.chain, resolution=15, limit=100)
+        candles = get_candles(tick.pair_addr, "solana", resolution="15")
         if not candles or len(candles) < 30:
             return {}
 
@@ -84,7 +82,7 @@ def _fetch_candles(pair_cfg: PairConfig) -> dict:
             "highs": highs,
             "lows": lows,
             "liquidity": tick.liquidity_usd,
-            "volume_24h": tick.volume_24h,
+            "volume_24h": tick.volume_24h_usd,
         }
     except Exception as exc:
         log.warning("[%s] Candle fetch failed: %s", pair_cfg.name, exc)
