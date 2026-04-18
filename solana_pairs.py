@@ -68,7 +68,7 @@ PAIR_CONFIGS = {
         rsi_overbought=70.0,
         ema_period=20,
         min_score=40.0,
-        enabled=True,
+        enabled=False,  # DISABLED: buy routing uses SOL instead of USDC, causes insufficient lamports
     ),
     "SFM/USDC": PairConfig(
         name="SFM/USDC",
