@@ -71,7 +71,7 @@ PAIR_CONFIGS = {
         rsi_overbought=72.0,
         ema_period=20,
         min_score=60.0,
-        enabled=True,
+        enabled=False,  # DISABLED: JitoSOL multi-hop USDC routing fails (0x1788 slippage). Sell manually in Phantom.
     ),
     "JUP/USDC": PairConfig(
         name="JUP/USDC",
