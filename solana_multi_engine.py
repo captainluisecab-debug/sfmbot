@@ -240,7 +240,7 @@ def run():
                     continue
 
                 if _pair_idx > 0:
-                    time.sleep(2)
+                    time.sleep(3)
                 _pair_idx += 1
 
                 # Earned-slot gate for tactical pairs
