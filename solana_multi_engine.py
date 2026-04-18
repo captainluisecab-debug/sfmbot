@@ -234,9 +234,14 @@ def run():
                 continue
 
             # Process each enabled pair
+            _pair_idx = 0
             for pair_name, pair_cfg in PAIR_CONFIGS.items():
                 if not pair_cfg.enabled:
                     continue
+
+                if _pair_idx > 0:
+                    time.sleep(2)
+                _pair_idx += 1
 
                 # Earned-slot gate for tactical pairs
                 if not _check_earned_slot(pair_name, st):
