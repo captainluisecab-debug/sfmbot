@@ -12,6 +12,9 @@ SOL_MINT  = "So11111111111111111111111111111111111111112"
 USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
 SFM_MINT  = "ELPrcU7qRV3DUz8AP6siTE7GkR3gkkBvGmgBRiLnC19Y"
 JITOSOL_MINT = "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn"
+JUP_MINT     = "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN"
+PYTH_MINT    = "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3"
+BONK_MINT    = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"
 
 
 @dataclass
@@ -69,6 +72,57 @@ PAIR_CONFIGS = {
         ema_period=20,
         min_score=40.0,
         enabled=False,  # DISABLED: buy routing uses SOL instead of USDC, causes insufficient lamports
+    ),
+    "JUP/USDC": PairConfig(
+        name="JUP/USDC",
+        base_mint=JUP_MINT,
+        quote_mint=USDC_MINT,
+        base_decimals=6,
+        quote_decimals=6,
+        strategy_type="swing",
+        max_allocation_pct=15.0,
+        slippage_bps=80,
+        stop_loss_pct=4.0,
+        take_profit_pct=8.0,
+        rsi_oversold=30.0,
+        rsi_overbought=72.0,
+        ema_period=20,
+        min_score=60.0,
+        enabled=True,
+    ),
+    "PYTH/USDC": PairConfig(
+        name="PYTH/USDC",
+        base_mint=PYTH_MINT,
+        quote_mint=USDC_MINT,
+        base_decimals=6,
+        quote_decimals=6,
+        strategy_type="swing",
+        max_allocation_pct=15.0,
+        slippage_bps=80,
+        stop_loss_pct=4.0,
+        take_profit_pct=8.0,
+        rsi_oversold=30.0,
+        rsi_overbought=72.0,
+        ema_period=20,
+        min_score=60.0,
+        enabled=True,
+    ),
+    "BONK/USDC": PairConfig(
+        name="BONK/USDC",
+        base_mint=BONK_MINT,
+        quote_mint=USDC_MINT,
+        base_decimals=5,
+        quote_decimals=6,
+        strategy_type="swing",
+        max_allocation_pct=15.0,
+        slippage_bps=100,
+        stop_loss_pct=5.0,
+        take_profit_pct=8.0,
+        rsi_oversold=30.0,
+        rsi_overbought=72.0,
+        ema_period=20,
+        min_score=60.0,
+        enabled=True,
     ),
     "SFM/USDC": PairConfig(
         name="SFM/USDC",
