@@ -15,6 +15,12 @@ from typing import List, Optional
 
 log = logging.getLogger("solana_strategy")
 
+# HITRUN-PARITY: hit-and-run small-profit compounder (matches Kraken Compounder
+# config 0.7% / 15min). Captures fast intraday gains on thin Solana pairs
+# before they can reverse into breakeven_stop or stop_loss territory.
+QUICK_PROFIT_PCT = 0.007
+QUICK_PROFIT_MAX_HOLD_SEC = 900
+
 
 @dataclass
 class Signal:
@@ -88,6 +94,7 @@ def compute_swing_signal(
     entry_price: float = 0.0,
     breakeven_armed: bool = False,
     peak_pnl_pct: float = 0.0,
+    hold_sec: int = 0,
 ) -> Signal:
     ind = compute_indicators(closes, highs, lows, ema_period=ema_period)
     if not ind:
@@ -144,6 +151,13 @@ def compute_swing_signal(
             return Signal("HOLD", "no_entry_price", price, rsi, ema, atr)
 
         pnl_pct = (price - entry_price) / entry_price * 100
+
+        # HITRUN-PARITY: hit-and-run small quick profit within short hold window.
+        # Checked FIRST — captures fast gains before breakeven_arm or trail
+        # get a chance to let them reverse. Matches Kraken Compounder rule.
+        if hold_sec > 0 and hold_sec <= QUICK_PROFIT_MAX_HOLD_SEC and pnl_pct >= QUICK_PROFIT_PCT * 100:
+            return Signal("SELL", f"quick_profit_hitrun pnl={pnl_pct:.2f}% hold={hold_sec}s",
+                         price, rsi, ema, atr)
 
         # Breakeven arm: once +1.5%, protect at breakeven
         if pnl_pct >= 1.5 and not breakeven_armed:

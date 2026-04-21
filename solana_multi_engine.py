@@ -275,6 +275,7 @@ def run():
                 has_position = pair_name in st.positions
                 pos = st.positions.get(pair_name)
 
+                _hold_sec = (int(time.time()) - pos.entry_ts) if (pos and pos.entry_ts) else 0
                 signal = compute_swing_signal(
                     price=price,
                     closes=data["closes"],
@@ -290,6 +291,7 @@ def run():
                     entry_price=pos.entry_price if pos else 0,
                     breakeven_armed=pos.breakeven_armed if pos else False,
                     peak_pnl_pct=pos.peak_pnl_pct if pos else 0,
+                    hold_sec=_hold_sec,
                 )
 
                 # Update breakeven arm state
