@@ -34,6 +34,12 @@ class PairConfig:
     ema_period: int
     min_score: float         # minimum signal score to enter
     enabled: bool
+    # Liquidity tier (W3 / SOL1+SOL2): classifies pair depth. Used to set
+    # pre-trade Jupiter price-impact ceiling. A=deep (SOL/USDC), B=medium,
+    # C=thin/tactical. BUY blocked if quote.price_impact_pct exceeds the
+    # ceiling; SELL uses 2x ceiling to avoid stranding a held position.
+    tier: str = "B"
+    max_price_impact_pct: float = 1.0
 
 
 JITOSOL_POOL = "AxHPCGeEMXfZMqGdUWSiGiGMdR9sCKJFhWDnBmqy5K6L"  # JitoSOL/SOL Orca pool
@@ -55,6 +61,8 @@ PAIR_CONFIGS = {
         ema_period=20,
         min_score=60.0,
         enabled=True,
+        tier="A",
+        max_price_impact_pct=0.5,
     ),
     "JITOSOL/USDC": PairConfig(
         name="JITOSOL/USDC",
@@ -72,6 +80,8 @@ PAIR_CONFIGS = {
         ema_period=20,
         min_score=60.0,
         enabled=False,  # DISABLED: JitoSOL multi-hop USDC routing fails (0x1788 slippage). Sell manually in Phantom.
+        tier="B",
+        max_price_impact_pct=1.0,
     ),
     "JUP/USDC": PairConfig(
         name="JUP/USDC",
@@ -89,6 +99,8 @@ PAIR_CONFIGS = {
         ema_period=20,
         min_score=60.0,
         enabled=True,
+        tier="B",
+        max_price_impact_pct=1.0,
     ),
     "PYTH/USDC": PairConfig(
         name="PYTH/USDC",
@@ -106,6 +118,8 @@ PAIR_CONFIGS = {
         ema_period=20,
         min_score=60.0,
         enabled=True,
+        tier="B",
+        max_price_impact_pct=1.0,
     ),
     "BONK/USDC": PairConfig(
         name="BONK/USDC",
@@ -123,6 +137,8 @@ PAIR_CONFIGS = {
         ema_period=20,
         min_score=60.0,
         enabled=True,
+        tier="C",
+        max_price_impact_pct=1.5,
     ),
     "SFM/USDC": PairConfig(
         name="SFM/USDC",
@@ -140,5 +156,7 @@ PAIR_CONFIGS = {
         ema_period=20,
         min_score=50.0,
         enabled=True,
+        tier="C",
+        max_price_impact_pct=1.5,
     ),
 }

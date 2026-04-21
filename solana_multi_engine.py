@@ -92,7 +92,13 @@ def _fetch_candles(pair_cfg: PairConfig) -> dict:
 # ── Execution ───────────────────────────────────────────────────────
 
 def _execute_buy(pair_cfg: PairConfig, usd_amount: float) -> dict:
-    """Buy base token with USDC via Jupiter."""
+    """Buy base token with USDC via Jupiter.
+
+    W3 (SOL1+SOL2): per-pair tier-based price-impact ceiling. Rejects BUY
+    if Jupiter-quoted price_impact_pct exceeds the pair's configured limit
+    (A=0.5%, B=1.0%, C=1.5%). Uses pair_cfg.max_price_impact_pct rather
+    than a hardcoded 2%; small accounts can't absorb deep-book slippage.
+    """
     from sfm_broker import get_quote as jup_quote
     quote = jup_quote(
         input_mint=pair_cfg.quote_mint,
@@ -103,15 +109,24 @@ def _execute_buy(pair_cfg: PairConfig, usd_amount: float) -> dict:
     )
     if not quote:
         return {}
-    if quote.price_impact_pct > 2.0:
-        log.warning("[%s] High price impact %.2f%% on BUY — skipping", pair_cfg.name, quote.price_impact_pct)
+    _buy_ceiling = float(getattr(pair_cfg, "max_price_impact_pct", 1.0) or 1.0)
+    _tier = getattr(pair_cfg, "tier", "B")
+    if quote.price_impact_pct > _buy_ceiling:
+        log.warning("[%s] BUY rejected: price_impact=%.2f%% > ceiling=%.2f%% (tier=%s)",
+                    pair_cfg.name, quote.price_impact_pct, _buy_ceiling, _tier)
         return {}
+    log.info("[%s] BUY quote ok: price_impact=%.2f%% <= ceiling=%.2f%% (tier=%s)",
+             pair_cfg.name, quote.price_impact_pct, _buy_ceiling, _tier)
     result = execute_swap(quote, _wallet_pubkey, _keypair)
     return result or {}
 
 
 def _execute_sell(pair_cfg: PairConfig, base_qty: float) -> dict:
-    """Sell base token for USDC via Jupiter."""
+    """Sell base token for USDC via Jupiter.
+
+    W3 (SOL1+SOL2): SELL ceiling = 2x BUY ceiling to avoid stranding a held
+    position. Exits must be possible even in mildly degraded liquidity.
+    """
     from sfm_broker import get_quote as jup_quote
     quote = jup_quote(
         input_mint=pair_cfg.base_mint,
@@ -122,9 +137,14 @@ def _execute_sell(pair_cfg: PairConfig, base_qty: float) -> dict:
     )
     if not quote:
         return {}
-    if quote.price_impact_pct > 3.0:
-        log.warning("[%s] High price impact %.2f%% on SELL — skipping", pair_cfg.name, quote.price_impact_pct)
+    _sell_ceiling = float(getattr(pair_cfg, "max_price_impact_pct", 1.0) or 1.0) * 2.0
+    _tier = getattr(pair_cfg, "tier", "B")
+    if quote.price_impact_pct > _sell_ceiling:
+        log.warning("[%s] SELL rejected: price_impact=%.2f%% > ceiling=%.2f%% (tier=%s)",
+                    pair_cfg.name, quote.price_impact_pct, _sell_ceiling, _tier)
         return {}
+    log.info("[%s] SELL quote ok: price_impact=%.2f%% <= ceiling=%.2f%% (tier=%s)",
+             pair_cfg.name, quote.price_impact_pct, _sell_ceiling, _tier)
     result = execute_swap(quote, _wallet_pubkey, _keypair)
     return result or {}
 
