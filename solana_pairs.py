@@ -155,7 +155,13 @@ PAIR_CONFIGS = {
         rsi_overbought=75.0,
         ema_period=20,
         min_score=50.0,
-        enabled=True,
+        # DISABLED 2026-04-21: Jupiter on-chain program fails 0x1788 at
+        # SharedAccountsRoute entry validation — not a slippage tolerance
+        # issue (tried 150, 1000, 3000 bps; all failed at 1376 CU before
+        # actual fill attempt). Route is broken for this position's token
+        # account state. Same class as JITOSOL/USDC disable. Existing
+        # 26.8M SFM position must be sold manually via Phantom wallet.
+        enabled=False,
         tier="C",
         max_price_impact_pct=1.5,
     ),
