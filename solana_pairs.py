@@ -147,22 +147,26 @@ PAIR_CONFIGS = {
         base_decimals=6,
         quote_decimals=6,
         strategy_type="tactical",
-        max_allocation_pct=15.0,
-        slippage_bps=150,
+        # RE-ENABLED 2026-04-21 with conservative risk config per operator
+        # direction. Prior disable was due to Jupiter 0x1788 on SELL at
+        # 150/1000/3000 bps slippage. Risk mitigations vs prior:
+        #   - slippage_bps 150 -> 500 (more Jupiter headroom, not reckless)
+        #   - max_allocation_pct 15 -> 5 (smaller exposure if stuck again)
+        #   - max_price_impact_pct 1.5 -> 3.0 (allow deeper routes on tier C)
+        #   - take_profit_pct 8 -> 5 (aggressive small-gain capture)
+        # NOTE: the existing 20.3M SFM token balance in the wallet was
+        # bought manually by operator and is NOT bot-tracked until operator
+        # provides a cost basis to inject into positions dict.
+        max_allocation_pct=5.0,
+        slippage_bps=500,
         stop_loss_pct=5.0,
-        take_profit_pct=8.0,
+        take_profit_pct=5.0,
         rsi_oversold=30.0,
         rsi_overbought=75.0,
         ema_period=20,
         min_score=50.0,
-        # DISABLED 2026-04-21: Jupiter on-chain program fails 0x1788 at
-        # SharedAccountsRoute entry validation — not a slippage tolerance
-        # issue (tried 150, 1000, 3000 bps; all failed at 1376 CU before
-        # actual fill attempt). Route is broken for this position's token
-        # account state. Same class as JITOSOL/USDC disable. Existing
-        # 26.8M SFM position must be sold manually via Phantom wallet.
-        enabled=False,
+        enabled=True,
         tier="C",
-        max_price_impact_pct=1.5,
+        max_price_impact_pct=3.0,
     ),
 }
