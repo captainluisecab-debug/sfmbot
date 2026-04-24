@@ -156,6 +156,44 @@ Only include parameters that need changing. Empty changes={{}} means no change n
         log.info("[BRAIN] cycle=%d no parameter changes needed | %s", cycle, reasoning)
         return None
 
+    # Autonomy guard — per-param pre-write check + attribution logging.
+    try:
+        import sys as _sys
+        if r"C:\Projects\supervisor" not in _sys.path:
+            _sys.path.insert(0, r"C:\Projects\supervisor")
+        from autonomy_guard import pre_write_check as _ag_pre, record_write as _ag_rec
+        equity_val = float(portfolio_val or 0)
+        realized   = float(getattr(state, "realized_pnl_usd", 0) or 0)
+        _allowed_overrides = dict(current or {})
+        for k, new_v in changes.items():
+            if k in PARAM_BOUNDS:
+                lo, hi = PARAM_BOUNDS[k]
+                clamped = round(max(lo, min(hi, float(new_v))), 2)
+                before_v = float((current or {}).get(k, clamped))
+                ok, why = _ag_pre(
+                    bot="sfm", param=k, before=before_v, after=float(clamped),
+                    hypothesis=reasoning,
+                    expected_impact_usd=max(abs(equity_val) * 0.001, 1.0),
+                    equity_usd=equity_val, regime=None,
+                    trigger="sfm_brain",
+                    bypass_attribution=False,
+                )
+                if not ok:
+                    log.warning("[BRAIN] param %s BLOCKED by autonomy_guard: %s", k, why)
+                    continue
+                _allowed_overrides[k] = clamped
+                _ag_rec(
+                    bot="sfm", param=k, before=before_v, after=float(clamped),
+                    hypothesis=reasoning,
+                    expected_impact_usd=max(abs(equity_val) * 0.001, 1.0),
+                    equity_usd=equity_val, regime=None,
+                    trigger="sfm_brain",
+                    realized_pnl_t0=realized,
+                )
+        new_overrides = _allowed_overrides
+    except Exception as _agexc:
+        log.warning("[BRAIN] autonomy_guard integration failed: %s — writing unguarded", _agexc)
+
     save_overrides(new_overrides)
     log.info("[BRAIN] cycle=%d overrides updated: %s | %s", cycle, new_overrides, reasoning)
     return new_overrides
