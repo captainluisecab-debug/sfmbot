@@ -33,6 +33,14 @@ logging.basicConfig(
 )
 log = logging.getLogger("solana_engine")
 
+# Color highlighting for stdout (file handler stays plain)
+try:
+    sys.path.insert(0, r"C:\Projects")
+    from log_colors import attach_color_formatter
+    attach_color_formatter(logging.getLogger())
+except Exception:
+    pass
+
 from sfm_settings import TRADE_MODE, PHANTOM_PRIVATE_KEY, SOLANA_RPC, CYCLE_SEC
 from sfm_broker import get_quote, execute_swap, USDC_MINT, USDC_DECIMALS
 from sfm_data import get_candles
