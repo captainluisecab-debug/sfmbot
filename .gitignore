@@ -1,5 +1,8 @@
 .env
 *.env
+.env.*
+# Backups — code .bak clutter + CREDENTIAL-bearing .env.bak (NEVER push keys)
+*.bak*
 state.json
 sfm_state.json
 logs/

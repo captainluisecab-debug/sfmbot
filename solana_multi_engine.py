@@ -366,43 +366,49 @@ def run():
                     log.info("[%s] Bought %.4f @ $%.6f (cost=$%.2f)",
                              pair_name, base_received, eff_price, trade_usd)
 
-            # Sync USDC balance from wallet each cycle (detect deposits)
-            try:
-                import requests as _req
-                _usdc_resp = _req.post(SOLANA_RPC, json={
-                    "jsonrpc": "2.0", "id": 99, "method": "getTokenAccountsByOwner",
-                    "params": [_wallet_pubkey,
-                               {"mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"},
-                               {"encoding": "jsonParsed"}]}, timeout=10)
-                for _ua in _usdc_resp.json().get("result", {}).get("value", []):
-                    _wallet_usdc = float(_ua["account"]["data"]["parsed"]["info"]["tokenAmount"]["uiAmount"] or 0)
-                    if abs(_wallet_usdc - st.usdc_balance) > 1.0:
-                        log.info("[SYNC] USDC wallet=$%.2f state=$%.2f — syncing", _wallet_usdc, st.usdc_balance)
-                        st.usdc_balance = _wallet_usdc
-            except Exception:
-                pass
+            # Sync USDC balance from wallet each cycle (detect deposits) — LIVE ONLY.
+            # PAPER (D-035, 2026-06-06): NO wallet RPC at all; the paper usdc_balance is
+            # authoritative and must never be overwritten by a real wallet read.
+            if TRADE_MODE == "LIVE":
+                try:
+                    import requests as _req
+                    _usdc_resp = _req.post(SOLANA_RPC, json={
+                        "jsonrpc": "2.0", "id": 99, "method": "getTokenAccountsByOwner",
+                        "params": [_wallet_pubkey,
+                                   {"mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"},
+                                   {"encoding": "jsonParsed"}]}, timeout=10)
+                    for _ua in _usdc_resp.json().get("result", {}).get("value", []):
+                        _wallet_usdc = float(_ua["account"]["data"]["parsed"]["info"]["tokenAmount"]["uiAmount"] or 0)
+                        if abs(_wallet_usdc - st.usdc_balance) > 1.0:
+                            log.info("[SYNC] USDC wallet=$%.2f state=$%.2f — syncing", _wallet_usdc, st.usdc_balance)
+                            st.usdc_balance = _wallet_usdc
+                except Exception:
+                    pass
 
             # Portfolio summary — include native SOL in equity
             total_deployed = sum(p.cost_usd for p in st.positions.values())
             sol_usd = 0.0
-            try:
-                _sol_resp = _req.post(SOLANA_RPC, json={
-                    "jsonrpc": "2.0", "id": 1, "method": "getBalance",
-                    "params": [_wallet_pubkey]}, timeout=10)
-                _sol = _sol_resp.json().get("result", {}).get("value", 0) / 1e9
-                # Get SOL price from latest tick data (reuse any SOL pair data from this cycle)
-                _sol_px = 0
+            # LIVE ONLY: read real SOL balance. PAPER (D-035): no real SOL wallet — sol_usd stays 0.
+            if TRADE_MODE == "LIVE":
                 try:
-                    from sfm_data import get_best_pair as _gbp
-                    _sol_tick = _gbp("So11111111111111111111111111111111111111112")
-                    _sol_px = _sol_tick.price_usd if _sol_tick else 0
+                    import requests as _req
+                    _sol_resp = _req.post(SOLANA_RPC, json={
+                        "jsonrpc": "2.0", "id": 1, "method": "getBalance",
+                        "params": [_wallet_pubkey]}, timeout=10)
+                    _sol = _sol_resp.json().get("result", {}).get("value", 0) / 1e9
+                    # Get SOL price from latest tick data (reuse any SOL pair data from this cycle)
+                    _sol_px = 0
+                    try:
+                        from sfm_data import get_best_pair as _gbp
+                        _sol_tick = _gbp("So11111111111111111111111111111111111111112")
+                        _sol_px = _sol_tick.price_usd if _sol_tick else 0
+                    except Exception:
+                        _sol_px = 88.0  # fallback
+                    sol_usd = _sol * _sol_px
+                    st.sol_balance = _sol
+                    st.sol_usd = round(sol_usd, 2)
                 except Exception:
-                    _sol_px = 88.0  # fallback
-                sol_usd = _sol * _sol_px
-                st.sol_balance = _sol
-                st.sol_usd = round(sol_usd, 2)
-            except Exception:
-                pass
+                    pass
             equity = st.usdc_balance + total_deployed + sol_usd
             if equity > st.peak_equity:
                 st.peak_equity = equity
@@ -415,7 +421,12 @@ def run():
 
             save_state(st)
 
-            # Outcome analyzer every 6 cycles (~30 min)
+            # Outcome analyzer every 6 cycles (~30 min).
+            # SHADOW MODE during paper validation (D-035, 2026-06-06): the analyzer runs
+            # and writes sfm_score_adjustments.json (the "learning signal"), but the live
+            # engine does NOT read that file — so no auto-tuning is applied to live params
+            # on a statistically meaningless sample (L-001/D-032). Auto-apply is a separate
+            # gated change, switched on only after edge is proven AND adjustments verified.
             if cycle % 6 == 0 and cycle > 0:
                 try:
                     from sfm_outcome_analyzer import run_analyzer
